@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Crazy Capture Tic Tac Toe (4x4)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #gameStatus {
+      font-size: 24px;
+      margin: 10px;
+    }
+    #gameBoard {
+      margin: 20px auto;
+      border-collapse: collapse;
+    }
+    #gameBoard td {
+      width: 80px;
+      height: 80px;
+      border: 2px solid #000;
+      font-size: 48px;
+      text-align: center;
+      vertical-align: middle;
+      cursor: pointer;
+      background: #fff;
+      position: relative;
+    }
+    #resetButton {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    /* Fade in animation for mark placement */
+    @keyframes fadeIn {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    /* Explosion animation for captured pieces */
+    @keyframes explode {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(2); opacity: 0; }
+    }
+    .explode {
+      animation: explode 0.5s ease-out;
+    }
+    /* Win board blink effect */
+    @keyframes winBlink {
+      0%, 100% { background-color: #fff; }
+      50% { background-color: #ff0; }
+    }
+    .win-blink {
+      animation: winBlink 1s infinite;
+    }
+  </style>
+</head>
+<body>
+  <h1>Crazy Capture Tic Tac Toe</h1>
+  <div id="gameStatus">Current Turn: X</div>
+  <table id="gameBoard">
+    <!-- 4x4 board -->
+    <tr>
+      <td data-row="0" data-col="0"></td>
+      <td data-row="0" data-col="1"></td>
+      <td data-row="0" data-col="2"></td>
+      <td data-row="0" data-col="3"></td>
+    </tr>
+    <tr>
+      <td data-row="1" data-col="0"></td>
+      <td data-row="1" data-col="1"></td>
+      <td data-row="1" data-col="2"></td>
+      <td data-row="1" data-col="3"></td>
+    </tr>
+    <tr>
+      <td data-row="2" data-col="0"></td>
+      <td data-row="2" data-col="1"></td>
+      <td data-row="2" data-col="2"></td>
+      <td data-row="2" data-col="3"></td>
+    </tr>
+    <tr>
+      <td data-row="3" data-col="0"></td>
+      <td data-row="3" data-col="1"></td>
+      <td data-row="3" data-col="2"></td>
+      <td data-row="3" data-col="3"></td>
+    </tr>
+  </table>
+  <button id="resetButton">Reset Game</button>
+
+  <script>
+    // Global game state
+    let board = [
+      ["", "", "", ""],
+      ["", "", "", ""],
+      ["", "", "", ""],
+      ["", "", "", ""]
+    ];
+    let currentPlayer = "X";
+    let gameOver = false;
+    let isAnimating = false; // flag to block clicks during animations
+    const boardSize = 4;
+    const statusDiv = document.getElementById("gameStatus");
+    const cells = document.querySelectorAll("#gameBoard td");
+    const gameBoardElement = document.getElementById("gameBoard");
+
+    // Add click listeners to all cells
+    cells.forEach(cell => {
+      cell.addEventListener("click", handleCellClick);
+    });
+    document.getElementById("resetButton").addEventListener("click", resetGame);
+
+    // Helper function: validate board boundaries
+    function isValid(row, col) {
+      return row >= 0 && row < boardSize && col >= 0 && col < boardSize;
+    }
+
+    // Main cell click handler
+    function handleCellClick(e) {
+      if (gameOver || isAnimating) return;
+      const cell = e.target;
+      const row = parseInt(cell.getAttribute("data-row"));
+      const col = parseInt(cell.getAttribute("data-col"));
+
+      // Only allow moves on empty cells
+      if (board[row][col] !== "") return;
+
+      // Place mark with fade-in animation
+      board[row][col] = currentPlayer;
+      cell.textContent = currentPlayer;
+      cell.classList.add("fade-in");
+      cell.addEventListener("animationend", () => {
+        cell.classList.remove("fade-in");
+      }, { once: true });
+
+      // Check win condition immediately after the move
+      if (checkWin(currentPlayer)) {
+        statusDiv.textContent = "Player " + currentPlayer + " wins!";
+        gameOver = true;
+        gameBoardElement.classList.add("win-blink");
+        return;
+      }
+
+      // Check for capture opportunities in 4 directions (including diagonals)
+      let captured = checkCaptures(row, col, currentPlayer);
+      if (captured.length > 0) {
+        // Chain explosion rule: if more than one capture, capture adjacent opponent pieces.
+        if (captured.length > 1) {
+          let extraCaptures = [];
+          captured.forEach(pos => {
+            const adjacents = getAdjacent(pos.row, pos.col);
+            adjacents.forEach(adj => {
+              if (board[adj.row][adj.col] === (currentPlayer === "X" ? "O" : "X")) {
+                if (!captured.some(c => c.row === adj.row && c.col === adj.col) &&
+                    !extraCaptures.some(c => c.row === adj.row && c.col === adj.col)) {
+                  extraCaptures.push(adj);
+                }
+              }
+            });
+          });
+          captured = captured.concat(extraCaptures);
+        }
+        // Block further clicks until animation completes
+        isAnimating = true;
+        // Remove captured pieces with explosion animation
+        captured.forEach(pos => {
+          board[pos.row][pos.col] = "";
+          const capturedCell = document.querySelector(`td[data-row="${pos.row}"][data-col="${pos.col}"]`);
+          if (capturedCell) {
+            capturedCell.classList.add("explode");
+            setTimeout(() => {
+              capturedCell.textContent = "";
+              capturedCell.classList.remove("explode");
+            }, 500);
+          }
+        });
+        // After animations finish, allow extra move without switching turns
+        setTimeout(() => {
+          statusDiv.textContent = "Capture! Player " + currentPlayer + " gets another move.";
+          isAnimating = false;
+        }, 600);
+      } else {
+        // If no capture, switch turns
+        currentPlayer = currentPlayer === "X" ? "O" : "X";
+        statusDiv.textContent = "Current Turn: " + currentPlayer;
+      }
+
+      // Check for draw: if no empty cells remain (ignoring that captures can re-open cells)
+      if (!gameOver && isBoardFull()) {
+        statusDiv.textContent = "Game Over: Draw!";
+        gameOver = true;
+      }
+    }
+
+    // Returns an array of orthogonal adjacent positions (for chain explosion)
+    function getAdjacent(row, col) {
+      const adjacent = [];
+      const deltas = [ {dr: -1, dc: 0}, {dr: 1, dc: 0}, {dr: 0, dc: -1}, {dr: 0, dc: 1} ];
+      deltas.forEach(d => {
+        const newRow = row + d.dr, newCol = col + d.dc;
+        if (isValid(newRow, newCol)) {
+          adjacent.push({row: newRow, col: newCol});
+        }
+      });
+      return adjacent;
+    }
+
+    // Checks capture opportunities (sandwiching opponent's mark) in 4 directions
+    function checkCaptures(row, col, player) {
+      let capturedPositions = [];
+      const opponent = player === "X" ? "O" : "X";
+      // Directions: horizontal, vertical, diagonal down-right, diagonal down-left
+      const directions = [
+        { dr: 0, dc: 1 },
+        { dr: 1, dc: 0 },
+        { dr: 1, dc: 1 },
+        { dr: 1, dc: -1 }
+      ];
+      directions.forEach(dir => {
+        const dr = dir.dr, dc = dir.dc;
+        // Option 1: new mark is the right (or bottom/right) end.
+        if (isValid(row - 2 * dr, col - 2 * dc)) {
+          if (board[row - 2 * dr][col - 2 * dc] === player && board[row - dr][col - dc] === opponent) {
+            capturedPositions.push({ row: row - dr, col: col - dc });
+          }
+        }
+        // Option 2: new mark is the left (or top/left) end.
+        if (isValid(row + 2 * dr, col + 2 * dc)) {
+          if (board[row + 2 * dr][col + 2 * dc] === player && board[row + dr][col + dc] === opponent) {
+            capturedPositions.push({ row: row + dr, col: col + dc });
+          }
+        }
+      });
+      return capturedPositions;
+    }
+
+    // Check for 4 in a row (win condition) in any direction
+    function checkWin(player) {
+      const directions = [
+        { dr: 0, dc: 1 },
+        { dr: 1, dc: 0 },
+        { dr: 1, dc: 1 },
+        { dr: 1, dc: -1 }
+      ];
+      for (let i = 0; i < boardSize; i++) {
+        for (let j = 0; j < boardSize; j++) {
+          if (board[i][j] === player) {
+            for (let d = 0; d < directions.length; d++) {
+              let count = 1;
+              const dr = directions[d].dr;
+              const dc = directions[d].dc;
+              let r = i, c = j;
+              for (let k = 1; k < 4; k++) {
+                r += dr;
+                c += dc;
+                if (isValid(r, c) && board[r][c] === player) {
+                  count++;
+                } else {
+                  break;
+                }
+              }
+              if (count === 4) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    // Returns true if there are no empty cells
+    function isBoardFull() {
+      for (let i = 0; i < boardSize; i++) {
+        for (let j = 0; j < boardSize; j++) {
+          if (board[i][j] === "") return false;
+        }
+      }
+      return true;
+    }
+
+    // Reset game state and UI
+    function resetGame() {
+      board = [
+        ["", "", "", ""],
+        ["", "", "", ""],
+        ["", "", "", ""],
+        ["", "", "", ""]
+      ];
+      currentPlayer = "X";
+      gameOver = false;
+      isAnimating = false;
+      statusDiv.textContent = "Current Turn: " + currentPlayer;
+      gameBoardElement.classList.remove("win-blink");
+      cells.forEach(cell => {
+        cell.textContent = "";
+        cell.classList.remove("explode");
+      });
+    }
+  </script>
+</body>
+</html>
