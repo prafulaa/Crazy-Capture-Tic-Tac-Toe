@@ -2,17 +2,51 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Crazy Capture Tic Tac Toe (4x4)</title>
+  <title>Crazy Capture Tic Tac Toe (4x4) - Animated Dark Background</title>
   <style>
+    /* Animate a dark gradient background */
+    @keyframes animateBG {
+      0% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+      100% {
+        background-position: 0% 50%;
+      }
+    }
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       margin: 0;
       padding: 20px;
-      background: #f0f0f0;
+      /* Dark gradient that slowly shifts */
+      background: linear-gradient(-45deg, #0d0d0d, #1a1a1a, #262626, #333333);
+      background-size: 400% 400%;
+      animation: animateBG 15s ease infinite;
+      /* Make text stand out on the dark background */
+      color: #fff;
     }
     h1 {
       margin-bottom: 10px;
+    }
+    /* Scoreboard styling */
+    #scoreboard {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+    /* Player name menu */
+    #playerNamesMenu {
+      margin-bottom: 20px;
+    }
+    #playerNamesMenu input {
+      padding: 5px;
+      margin: 5px;
+    }
+    #updateNamesButton {
+      padding: 5px 10px;
+      cursor: pointer;
     }
     #gameStatus {
       font-size: 24px;
@@ -22,15 +56,17 @@
       margin: 20px auto;
       border-collapse: collapse;
     }
+    /* Updated border color to black (#000) so lines are visible on white cells */
     #gameBoard td {
       width: 80px;
       height: 80px;
-      border: 2px solid #000;
+      border: 2px solid #000; /* Black border for clear visibility */
       font-size: 48px;
       text-align: center;
       vertical-align: middle;
       cursor: pointer;
-      background: #fff;
+      background: #fff; /* White cells for contrast */
+      color: #000;      /* Marks (X or O) in black */
       position: relative;
     }
     #resetButton {
@@ -39,7 +75,7 @@
       cursor: pointer;
       margin-top: 10px;
     }
-    /* Fade in animation for mark placement */
+    /* Fade in animation for new marks */
     @keyframes fadeIn {
       from { transform: scale(0); opacity: 0; }
       to { transform: scale(1); opacity: 1; }
@@ -47,13 +83,19 @@
     .fade-in {
       animation: fadeIn 0.3s ease-out;
     }
-    /* Explosion animation for captured pieces */
+    /* Explosion animation with red blink effect for captured pieces */
     @keyframes explode {
-      from { transform: scale(1); opacity: 1; }
-      to { transform: scale(2); opacity: 0; }
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+    @keyframes redBlink {
+      0% { color: red; }
+      50% { color: white; }
+      100% { color: red; }
     }
     .explode {
-      animation: explode 0.5s ease-out;
+      animation: explode 0.5s ease-out, redBlink 0.5s ease-out;
     }
     /* Win board blink effect */
     @keyframes winBlink {
@@ -67,9 +109,22 @@
 </head>
 <body>
   <h1>Crazy Capture Tic Tac Toe</h1>
-  <div id="gameStatus">Current Turn: X</div>
+  <!-- Scoreboard -->
+  <div id="scoreboard">
+    <span id="player1NameDisplay">Player1 (X): </span><span id="player1Score">0</span>
+    &nbsp;|&nbsp;
+    <span id="player2NameDisplay">Player2 (O): </span><span id="player2Score">0</span>
+  </div>
+  <!-- Gamertag Menu -->
+  <div id="playerNamesMenu">
+    <input type="text" id="player1Input" placeholder="Enter Player1 Gamertag" />
+    <input type="text" id="player2Input" placeholder="Enter Player2 Gamertag" />
+    <button id="updateNamesButton">Update Names</button>
+  </div>
+  <!-- Game status -->
+  <div id="gameStatus">Current Turn: Player1 (X)</div>
+  <!-- Game board (4x4) -->
   <table id="gameBoard">
-    <!-- 4x4 board -->
     <tr>
       <td data-row="0" data-col="0"></td>
       <td data-row="0" data-col="1"></td>
@@ -95,45 +150,87 @@
       <td data-row="3" data-col="3"></td>
     </tr>
   </table>
-  <button id="resetButton">Reset Game</button>
-
+  <!-- Next round button -->
+  <button id="resetButton">Next Round</button>
+  
   <script>
-    // Global game state
+    // Global game variables
     let board = [
       ["", "", "", ""],
       ["", "", "", ""],
       ["", "", "", ""],
       ["", "", "", ""]
     ];
-    let currentPlayer = "X";
-    let gameOver = false;
-    let isAnimating = false; // flag to block clicks during animations
     const boardSize = 4;
+    let currentPlayer = "X"; // "X" for Player1, "O" for Player2
+    let gameOver = false;
+    let isAnimating = false;
+    let lastWinner = null; // Stores the last winner ("X" or "O")
+    
+    // Player names and scores
+    let player1Name = "Player1";
+    let player2Name = "Player2";
+    let player1Score = 0;
+    let player2Score = 0;
+    
+    // DOM elements
     const statusDiv = document.getElementById("gameStatus");
+    const player1NameDisplay = document.getElementById("player1NameDisplay");
+    const player2NameDisplay = document.getElementById("player2NameDisplay");
+    const player1ScoreDisplay = document.getElementById("player1Score");
+    const player2ScoreDisplay = document.getElementById("player2Score");
     const cells = document.querySelectorAll("#gameBoard td");
     const gameBoardElement = document.getElementById("gameBoard");
-
-    // Add click listeners to all cells
+    const updateNamesButton = document.getElementById("updateNamesButton");
+    const resetButton = document.getElementById("resetButton");
+    
+    // Attach click listeners to board cells
     cells.forEach(cell => {
       cell.addEventListener("click", handleCellClick);
     });
-    document.getElementById("resetButton").addEventListener("click", resetGame);
-
-    // Helper function: validate board boundaries
+    
+    updateNamesButton.addEventListener("click", updateNames);
+    resetButton.addEventListener("click", resetGame);
+    
+    function updateNames() {
+      const input1 = document.getElementById("player1Input").value.trim();
+      const input2 = document.getElementById("player2Input").value.trim();
+      if (input1 !== "") {
+        player1Name = input1;
+      }
+      if (input2 !== "") {
+        player2Name = input2;
+      }
+      updateScoreboard();
+      updateStatus();
+    }
+    
+    function updateScoreboard() {
+      player1NameDisplay.textContent = player1Name + " (X): ";
+      player2NameDisplay.textContent = player2Name + " (O): ";
+      player1ScoreDisplay.textContent = player1Score;
+      player2ScoreDisplay.textContent = player2Score;
+    }
+    
+    function updateStatus() {
+      statusDiv.textContent = currentPlayer === "X" ?
+        "Current Turn: " + player1Name + " (X)" :
+        "Current Turn: " + player2Name + " (O)";
+    }
+    
     function isValid(row, col) {
       return row >= 0 && row < boardSize && col >= 0 && col < boardSize;
     }
-
-    // Main cell click handler
+    
     function handleCellClick(e) {
       if (gameOver || isAnimating) return;
       const cell = e.target;
       const row = parseInt(cell.getAttribute("data-row"));
       const col = parseInt(cell.getAttribute("data-col"));
-
-      // Only allow moves on empty cells
+      
+      // Only allow moves in empty cells
       if (board[row][col] !== "") return;
-
+      
       // Place mark with fade-in animation
       board[row][col] = currentPlayer;
       cell.textContent = currentPlayer;
@@ -141,37 +238,27 @@
       cell.addEventListener("animationend", () => {
         cell.classList.remove("fade-in");
       }, { once: true });
-
-      // Check win condition immediately after the move
+      
+      // Check win condition
       if (checkWin(currentPlayer)) {
-        statusDiv.textContent = "Player " + currentPlayer + " wins!";
+        // Update score
+        if (currentPlayer === "X") {
+          player1Score++;
+        } else {
+          player2Score++;
+        }
+        updateScoreboard();
+        statusDiv.textContent = "Winner: " + (currentPlayer === "X" ? player1Name : player2Name);
         gameOver = true;
+        lastWinner = currentPlayer;
         gameBoardElement.classList.add("win-blink");
         return;
       }
-
-      // Check for capture opportunities in 4 directions (including diagonals)
+      
+      // Check for capture opportunities (in 4 directions including diagonals)
       let captured = checkCaptures(row, col, currentPlayer);
       if (captured.length > 0) {
-        // Chain explosion rule: if more than one capture, capture adjacent opponent pieces.
-        if (captured.length > 1) {
-          let extraCaptures = [];
-          captured.forEach(pos => {
-            const adjacents = getAdjacent(pos.row, pos.col);
-            adjacents.forEach(adj => {
-              if (board[adj.row][adj.col] === (currentPlayer === "X" ? "O" : "X")) {
-                if (!captured.some(c => c.row === adj.row && c.col === adj.col) &&
-                    !extraCaptures.some(c => c.row === adj.row && c.col === adj.col)) {
-                  extraCaptures.push(adj);
-                }
-              }
-            });
-          });
-          captured = captured.concat(extraCaptures);
-        }
-        // Block further clicks until animation completes
         isAnimating = true;
-        // Remove captured pieces with explosion animation
         captured.forEach(pos => {
           board[pos.row][pos.col] = "";
           const capturedCell = document.querySelector(`td[data-row="${pos.row}"][data-col="${pos.col}"]`);
@@ -183,25 +270,22 @@
             }, 500);
           }
         });
-        // After animations finish, allow extra move without switching turns
-        setTimeout(() => {
-          statusDiv.textContent = "Capture! Player " + currentPlayer + " gets another move.";
-          isAnimating = false;
-        }, 600);
+        statusDiv.textContent = "Capture! " + (currentPlayer === "X" ? player1Name : player2Name) + " gets another move.";
+        setTimeout(() => { isAnimating = false; }, 600);
       } else {
-        // If no capture, switch turns
+        // Switch turn if no capture occurred
         currentPlayer = currentPlayer === "X" ? "O" : "X";
-        statusDiv.textContent = "Current Turn: " + currentPlayer;
+        updateStatus();
       }
-
-      // Check for draw: if no empty cells remain (ignoring that captures can re-open cells)
+      
+      // Check for draw condition
       if (!gameOver && isBoardFull()) {
         statusDiv.textContent = "Game Over: Draw!";
         gameOver = true;
       }
     }
-
-    // Returns an array of orthogonal adjacent positions (for chain explosion)
+    
+    // Get orthogonal adjacent positions (used for chain explosion)
     function getAdjacent(row, col) {
       const adjacent = [];
       const deltas = [ {dr: -1, dc: 0}, {dr: 1, dc: 0}, {dr: 0, dc: -1}, {dr: 0, dc: 1} ];
@@ -213,12 +297,11 @@
       });
       return adjacent;
     }
-
-    // Checks capture opportunities (sandwiching opponent's mark) in 4 directions
+    
+    // Check for capture opportunities (sandwiching an opponent's mark)
     function checkCaptures(row, col, player) {
       let capturedPositions = [];
       const opponent = player === "X" ? "O" : "X";
-      // Directions: horizontal, vertical, diagonal down-right, diagonal down-left
       const directions = [
         { dr: 0, dc: 1 },
         { dr: 1, dc: 0 },
@@ -227,23 +310,38 @@
       ];
       directions.forEach(dir => {
         const dr = dir.dr, dc = dir.dc;
-        // Option 1: new mark is the right (or bottom/right) end.
+        // Option 1: new mark is one end of the sandwich
         if (isValid(row - 2 * dr, col - 2 * dc)) {
           if (board[row - 2 * dr][col - 2 * dc] === player && board[row - dr][col - dc] === opponent) {
             capturedPositions.push({ row: row - dr, col: col - dc });
           }
         }
-        // Option 2: new mark is the left (or top/left) end.
+        // Option 2: new mark is the opposite end
         if (isValid(row + 2 * dr, col + 2 * dc)) {
           if (board[row + 2 * dr][col + 2 * dc] === player && board[row + dr][col + dc] === opponent) {
             capturedPositions.push({ row: row + dr, col: col + dc });
           }
         }
       });
+      // Chain explosion: if more than one capture, also remove adjacent opponent pieces
+      if (capturedPositions.length > 1) {
+        let extraCaptures = [];
+        capturedPositions.forEach(pos => {
+          const adjacents = getAdjacent(pos.row, pos.col);
+          adjacents.forEach(adj => {
+            if (board[adj.row][adj.col] === opponent &&
+                !capturedPositions.some(c => c.row === adj.row && c.col === adj.col) &&
+                !extraCaptures.some(c => c.row === adj.row && c.col === adj.col)) {
+              extraCaptures.push(adj);
+            }
+          });
+        });
+        capturedPositions = capturedPositions.concat(extraCaptures);
+      }
       return capturedPositions;
     }
-
-    // Check for 4 in a row (win condition) in any direction
+    
+    // Check for 4 in a row win condition
     function checkWin(player) {
       const directions = [
         { dr: 0, dc: 1 },
@@ -277,8 +375,8 @@
       }
       return false;
     }
-
-    // Returns true if there are no empty cells
+    
+    // Check if the board is full (draw)
     function isBoardFull() {
       for (let i = 0; i < boardSize; i++) {
         for (let j = 0; j < boardSize; j++) {
@@ -287,24 +385,27 @@
       }
       return true;
     }
-
-    // Reset game state and UI
+    
+    // Reset board for next round; loser goes first if game ended with a win.
     function resetGame() {
+      // Reset isAnimating flag along with other game states.
+      isAnimating = false;
+      if (gameOver && lastWinner) {
+        currentPlayer = lastWinner === "X" ? "O" : "X";
+      }
       board = [
         ["", "", "", ""],
         ["", "", "", ""],
         ["", "", "", ""],
         ["", "", "", ""]
       ];
-      currentPlayer = "X";
-      gameOver = false;
-      isAnimating = false;
-      statusDiv.textContent = "Current Turn: " + currentPlayer;
-      gameBoardElement.classList.remove("win-blink");
       cells.forEach(cell => {
         cell.textContent = "";
         cell.classList.remove("explode");
       });
+      gameOver = false;
+      gameBoardElement.classList.remove("win-blink");
+      updateStatus();
     }
   </script>
 </body>
